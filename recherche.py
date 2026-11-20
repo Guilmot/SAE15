@@ -1,4 +1,11 @@
 import pandas as pd
+import folium
+import colorsys
+import html
+from pathlib import Path
+
+## conda install -c conda-forge folium
+## to install folium
 
 Path_data = "../data/data" 
 Path_ref = "../ref"
@@ -104,6 +111,18 @@ def getRegion(code_postal):
     return None, None
 
 
+def get_natures():
+    ref = sup_nature_df.dropna(subset=["NAT_ID", "NAT_LB_NOM"])
+
+    return dict(
+        zip(
+            ref["NAT_ID"].astype(str).str.strip(),
+            ref["NAT_LB_NOM"].astype(str).str.strip()
+        )
+    )
+
+natures = get_natures()
+
 ## retrun a dictionnary of index corresponding to the result of a research that can be by postal code, city name, region name
 ## contain two parameters : researchType indicate the research value ("CodePostal" for postal code, "Region" for the region, "Commune" for the city )
 ## researchValue is the value to research for exemple a postal code, city name ...
@@ -114,10 +133,10 @@ def userResearch(researchType : str, researchValue):
     def newEntry(table,x,df):
         ListResResult.append(
             {
-                "SUP_ID" : df["SUP_ID"][x].item(),
                 "STA_NM_ANFR" : df["STA_NM_ANFR"][x], ## L'Identifiant STA_NM_ANFR Permet une jointure avec toutes les autres tables
-                "NAT_ID" : df["NAT_ID"][x].item(),
-                "TPO_ID" : df["TPO_ID"][x].item()
+                "SUP_ID": df["SUP_ID"].iloc[x],
+                "NAT_ID": df["NAT_ID"].iloc[x],
+                "TPO_ID": df["TPO_ID"].iloc[x]
                 #"ADM_ID": sup_station_df.loc[sup_station_df["STA_NM_ANFR"] == df["STA_NM_ANFR"].iloc[x], "ADM_ID"].iloc[0].item() if not sup_station_df.loc[sup_station_df["STA_NM_ANFR"] == df["STA_NM_ANFR"].iloc[x]].empty else None,
                 #"AER_ID": sup_antenne_df.loc[sup_antenne_df["STA_NM_ANFR"] == df["STA_NM_ANFR"].iloc[x], "AER_ID"].iloc[0].item() if not sup_antenne_df.loc[sup_antenne_df["STA_NM_ANFR"] == df["STA_NM_ANFR"].iloc[x]].empty else None,
                 #"TAE_ID": sup_antenne_df.loc[sup_antenne_df["STA_NM_ANFR"] == df["STA_NM_ANFR"].iloc[x], "TAE_ID"].iloc[0].item() if not sup_antenne_df.loc[sup_antenne_df["STA_NM_ANFR"] == df["STA_NM_ANFR"].iloc[x]].empty else None,
@@ -151,7 +170,7 @@ def userResearch(researchType : str, researchValue):
         if correctResearchType == "lieu":
             lieuActuel = correct_str(df["ADR_LB_LIEU"][x])
 
-            if lieuActuel == str(researchValue):
+            if lieuActuel == correct_str(researchValue):
                 newEntry(ListResResult,x,df)
 
         ## in the case the research is made by region name
@@ -163,5 +182,358 @@ def userResearch(researchType : str, researchValue):
                 
     return ListResResult
 
-print(userResearch("codepostal","76690"))
+
+def generateMap(researchType, researchValue):
+
+    def nombre(serie):
+        """Convertit une série en nombres, en acceptant les virgules."""
+        return pd.to_numeric(
+            serie.astype(str).str.replace(",", ".", regex=False),
+            errors="coerce"
+        )
+
+    def dms_en_decimal(degres, minutes, secondes, hemisphere):
+        """Convertit des coordonnées DMS en degrés décimaux."""
+
+        valeur = (
+            nombre(degres)
+            + nombre(minutes) / 60
+            + nombre(secondes) / 3600
+        )
+
+        hemisphere = hemisphere.astype(str).str.upper().str.strip()
+
+        return valeur.where(~hemisphere.isin(["S", "W"]), -valeur)
+
+    def couleur(i):
+        """Génère une couleur différente pour chaque propriétaire."""
+
+        teinte = (i * 0.618033988749895) % 1
+        r, g, b = colorsys.hls_to_rgb(teinte, 0.45, 0.75)
+
+        return "#{:02x}{:02x}{:02x}".format(
+            int(r * 255),
+            int(g * 255),
+            int(b * 255)
+        )
+
+    def texte_sur(valeur):
+        """Sécurise le texte affiché dans les fenêtres HTML."""
+
+        return html.escape(str(valeur)).replace("`", "'").replace("\\", "/")
+
+    def fenetre_details(point):
+        """Construit la fenêtre d'informations d'un support."""
+
+        lignes = [
+            f"<h4 style='margin:0 0 6px'>{texte_sur(point['nom'])}</h4>"
+        ]
+
+        for cle, valeur in point.items():
+
+            if cle not in ("nom", "lat", "lon"):
+                lignes.append(
+                    f"<b>{texte_sur(cle)} :</b> "
+                    f"{texte_sur(valeur)}<br>"
+                )
+
+        lignes.append(
+            f"<b>Coordonnées :</b> {point['lat']}, {point['lon']}"
+        )
+
+        return "".join(lignes)
+
+    # --------------------------------------------------
+    # 1. Récupération des résultats de la recherche
+    # --------------------------------------------------
+
+    resultats = userResearch(researchType, researchValue)
+
+    if not resultats:
+        print("Aucun résultat trouvé pour cette recherche.")
+        return
+
+    print(f"{len(resultats)} résultats trouvés.")
+
+    # Récupération des identifiants des supports
+    ids_support = [resultat["SUP_ID"] for resultat in resultats]
+
+    # On récupère les supports correspondants dans sup_support_df
+    df = sup_support_df[
+        sup_support_df["SUP_ID"].isin(ids_support)
+    ].copy()
+
+    # Une ligne par support
+    nb_stations = df.groupby("SUP_ID").size()
+
+    df = df.drop_duplicates(subset="SUP_ID").copy()
+
+    # --------------------------------------------------
+    # 2. Application de la limite de recherche
+    # --------------------------------------------------
+
+    if limiteRecherche != -1 and len(df) > limiteRecherche:
+
+        print(
+            f"Limitation de {len(df)} à "
+            f"{limiteRecherche} supports."
+        )
+
+        df = df.head(limiteRecherche)
+
+    print(f"{len(df)} supports seront affichés sur la carte.")
+
+    # --------------------------------------------------
+    # 3. Conversion des coordonnées GPS
+    # --------------------------------------------------
+
+    df["lat"] = dms_en_decimal(
+        df["COR_NB_DG_LAT"],
+        df["COR_NB_MN_LAT"],
+        df["COR_NB_SC_LAT"],
+        df["COR_CD_NS_LAT"]
+    )
+
+    df["lon"] = dms_en_decimal(
+        df["COR_NB_DG_LON"],
+        df["COR_NB_MN_LON"],
+        df["COR_NB_SC_LON"],
+        df["COR_CD_EW_LON"]
+    )
+
+    # Suppression des coordonnées invalides
+    df = df.dropna(subset=["lat", "lon"])
+
+    # --------------------------------------------------
+    # 4. Récupération des noms des propriétaires et des natures des installations
+    # --------------------------------------------------
+
+    proprietaires = {}
+
+    if "TPO_ID" in sup_proprietaire_df.columns:
+
+        col_nom = next(
+            (
+                c for c in sup_proprietaire_df.columns
+                if c != "TPO_ID" and c.endswith("_LB")
+            ),
+            None
+        )
+
+        if col_nom is not None:
+
+            ref = sup_proprietaire_df.dropna(
+                subset=["TPO_ID", col_nom]
+            )
+
+            proprietaires = dict(
+                zip(
+                    ref["TPO_ID"].astype(str).str.strip(),
+                    ref[col_nom].astype(str).str.strip()
+                )
+            )
             
+    # Récupération des noms des natures
+
+    natures = {}
+
+    for _, ligne in sup_nature_df.iterrows():
+
+        natures[str(ligne["NAT_ID"]).strip()] = ligne["NAT_LB_NOM"]
+
+    # --------------------------------------------------
+    # 5. Construction des points de la carte
+    # --------------------------------------------------
+
+    points = []
+
+    for _, ligne in df.iterrows():
+
+        # Construction de l'adresse
+        morceaux = [
+            ligne.get("ADR_LB_LIEU"),
+            ligne.get("ADR_LB_ADD1"),
+            ligne.get("ADR_LB_ADD2"),
+            ligne.get("ADR_LB_ADD3"),
+            ligne.get("ADR_NM_CP")
+        ]
+
+        adresse = ", ".join(
+            str(m).strip()
+            for m in morceaux
+            if pd.notna(m) and str(m).strip()
+        )
+
+        # Récupération du propriétaire
+        code_tpo = str(ligne["TPO_ID"]).strip()
+
+        nom_proprietaire = proprietaires.get(
+            code_tpo,
+            code_tpo
+        )
+
+        if pd.isna(ligne["TPO_ID"]):
+            nom_proprietaire = "Non renseigné"
+
+        # Nombre de stations associées au support
+        nb = int(nb_stations.loc[ligne["SUP_ID"]])
+
+        points.append({
+
+            "nom": f"Support n° {ligne['SUP_ID']}",
+
+            "lat": round(float(ligne["lat"]), 6),
+            "lon": round(float(ligne["lon"]), 6),
+
+            "Adresse": adresse,
+
+            "Propriétaire": nom_proprietaire,
+
+            "Hauteur (m)": ligne.get("SUP_NM_HAUT", ""),
+
+            "Nature (code)": ligne.get("NAT_ID", ""),
+
+            "Nature": natures.get(
+                str(ligne.get("NAT_ID", "")).strip(),
+                "Nature inconnue"
+            ),
+
+            "Code INSEE commune": ligne.get("COM_CD_INSEE", ""),
+
+            "Stations sur le site": nb
+        })
+
+    if not points:
+        print("Aucun support avec des coordonnées GPS valides.")
+        return
+
+    # --------------------------------------------------
+    # 6. Création de la carte
+    # --------------------------------------------------
+
+    URL_IGN = (
+        "https://data.geopf.fr/wmts?REQUEST=GetTile&SERVICE=WMTS&VERSION=1.0.0"
+        "&STYLE=normal&TILEMATRIXSET=PM&FORMAT=image/png"
+        "&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2"
+        "&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}"
+    )
+
+    carte = folium.Map(
+        location=[46.6, 2.5],
+        zoom_start=6,
+        tiles=None,
+        prefer_canvas=True
+    )
+
+    folium.TileLayer(
+        tiles=URL_IGN,
+        attr="© IGN - Géoplateforme",
+        name="Plan IGN",
+        control=False
+    ).add_to(carte)
+
+    # --------------------------------------------------
+    # 7. Regroupement des points par propriétaire
+    # --------------------------------------------------
+
+    par_nature = {}
+
+    for p in points:
+
+        par_nature.setdefault(
+            p["Nature"], []
+        ).append(p)
+
+    # --------------------------------------------------
+    # 8. Création des couches ( volet de droite ) et des marqueurs
+    # --------------------------------------------------
+
+    for i, nom in enumerate(sorted(par_nature)):
+
+        liste = par_nature[nom]
+
+        teinte = couleur(i)
+
+        etiquette = (
+            f"<span style='color:{teinte}'>&#9679;</span> "
+            f"{texte_sur(nom)} ({len(liste)})"
+        )
+
+        couche = folium.FeatureGroup(
+            name=etiquette,
+            show=True
+        ).add_to(carte)
+
+        for p in liste:
+
+            hauteur = pd.to_numeric(
+                p["Hauteur (m)"],
+                errors="coerce"
+            )
+
+            if pd.isna(hauteur):
+                hauteur = 0
+
+            hauteur = float(hauteur)
+
+            folium.CircleMarker(
+
+                location=[p["lat"], p["lon"]],
+                
+                radius=6 + (hauteur * 0.125),
+
+                color="#333333",
+                weight=2 + (hauteur * 0.035),
+
+                fill=True,
+                fill_color=teinte,
+                fill_opacity=0.85,
+
+                tooltip=texte_sur(p["nom"]),
+
+                popup=folium.Popup(
+                    fenetre_details(p),
+                    max_width=320
+                )
+
+            ).add_to(couche)
+
+    # --------------------------------------------------
+    # 9. Configuration du sélecteur de couches
+    # --------------------------------------------------
+
+    folium.LayerControl(
+        position="topleft",
+        collapsed=False
+    ).add_to(carte)
+
+    # --------------------------------------------------
+    # 10. Recadrage automatique sur les points
+    # --------------------------------------------------
+
+    carte.fit_bounds([
+
+        [
+            min(p["lat"] for p in points),
+            min(p["lon"] for p in points)
+        ],
+
+        [
+            max(p["lat"] for p in points),
+            max(p["lon"] for p in points)
+        ]
+
+    ])
+
+    # --------------------------------------------------
+    # 11. Enregistrement de la carte
+    # --------------------------------------------------
+
+    carte.save("carte.html")
+
+    print(f"Carte générée : {len(points)} supports affichés.")
+    print("Fichier : carte.html")
+  
+
+
+generateMap("codepostal", "76690")       
