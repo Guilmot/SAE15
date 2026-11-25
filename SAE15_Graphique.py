@@ -9,6 +9,7 @@ DOSSIER_SCRIPT = os.path.dirname(os.path.abspath(__file__)) # Dossier où se tro
 DOSSIER_DATA = os.path.join(DOSSIER_SCRIPT, 'data') # Dossier des tables principales
 DOSSIER_REF = os.path.join(DOSSIER_SCRIPT, 'ref') # Dossier des tables de référence (les libellés)
 CHEMIN_IMAGE = os.path.join(DOSSIER_SCRIPT, 'graphiques.png') # Image des graphiques, enregistrée à côté du script
+ANNEE_MIN = 1950 # Les dates avant 1950 sont considérées comme des erreurs de saisie, on les ignorera
 LARGEUR_GRAPHIQUES = 1270 # Largeur des graphiques en pixels (un peu moins que la fenêtre pour laisser la place à la barre de défilement)
 HAUTEUR_GRAPHIQUES = 900 # Hauteur des graphiques en pixels (plus grande que la fenêtre : on fait défiler pour tout voir)
 
@@ -102,6 +103,18 @@ for graphique in [graphiques[1, 0], graphiques[1, 1]]: # Pour les 2 diagrammes e
     graphique.invert_yaxis() # On met la valeur la plus grande en haut
     graphique.bar_label(graphique.containers[0], padding=3, fontsize=7) # On écrit la valeur au bout de chaque barre
     graphique.margins(x=0.2) # On laisse de la place à droite pour que les valeurs ne sortent pas du cadre
+
+# Graphique 6 : installations actuelles, cumulées selon leur année de mise en service
+annees_service = stations['DTE_EN_SERVICE'].dt.year.dropna().astype(int) # On récupère l'année de mise en service de chaque installation (sans les dates vides), en nombre entier pour éviter les 2010.0
+annee_actuelle = pd.Timestamp.today().year # Année actuelle
+nb_trop_anciennes = (annees_service < ANNEE_MIN).sum() # On compte les années avant 1980
+nb_dans_le_futur = (annees_service > annee_actuelle).sum() # On compte les années dans le futur
+annees_service = annees_service[(annees_service >= ANNEE_MIN) & (annees_service <= annee_actuelle)] # On garde seulement les années entre 1980 et aujourd'hui
+cumul_installations = annees_service.value_counts().sort_index().cumsum() # On compte les installations par année, on trie par année, puis on fait le cumul
+graphiques[1, 2].plot(cumul_installations.index, cumul_installations.values, marker='o', markersize=3, color='purple') # On dessine la courbe dans la case en bas à droite
+graphiques[1, 2].set_title("Installations actuelles (cumul)") # Le fichier ne contient que les installations qui existent encore : les installations démontées n'apparaissent pas
+graphiques[1, 2].set_xlabel('Année de mise en service') # Nom de l'axe horizontal
+graphiques[1, 2].set_ylabel("Nombre d'installations") # Nom de l'axe vertical
 
 for graphique in graphiques.flat: # Pour chacun des 6 graphiques
     graphique.tick_params(labelsize=7) # Taille du texte des axes
