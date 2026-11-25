@@ -59,7 +59,12 @@ top_exploitants = stations['ADM_LB_NOM'].value_counts().head(10) # value_counts 
 top_exploitants.plot(kind='bar', ax=graphiques[0, 0], color='skyblue', xlabel='', ylabel="Nombre d'installations") # On dessine un diagramme en barres dans la case en haut à gauche
 graphiques[0, 0].set_title('Installations par exploitant') # Titre du graphique
 
-for graphique in [graphiques[0, 0]]: # Pour le diagramme en barres verticales
+# Graphique 2 : natures de support (les 10 plus fréquentes)
+top_natures = supports['NAT_LB_NOM'].value_counts().head(10) # On compte chaque nature de support et on garde les 10 premières
+top_natures.plot(kind='bar', ax=graphiques[0, 1], color='lightcoral', xlabel='', ylabel='Nombre de supports') # On dessine un diagramme en barres dans la case en haut au milieu
+graphiques[0, 1].set_title('Natures de support (top 10)') # Titre du graphique
+
+for graphique in [graphiques[0, 0], graphiques[0, 1]]: # Pour les 2 diagrammes en barres verticales
     graphique.bar_label(graphique.containers[0], fontsize=7) # On écrit la valeur au-dessus de chaque barre
     graphique.margins(y=0.1) # On laisse de la place en haut pour que les valeurs ne sortent pas du cadre
     for nom_barre in graphique.get_xticklabels(): # Pour chaque nom sous les barres
