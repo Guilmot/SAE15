@@ -88,6 +88,16 @@ graphiques[0, 2].pie(parts_proprietaires, colors=couleurs_camembert[:len(parts_p
 graphiques[0, 2].legend(parts_proprietaires.index, loc='upper center', bbox_to_anchor=(0.5, 0), ncol=2, fontsize=7) # On met les noms dans une légende centrée juste sous le camembert, sur 2 colonnes
 graphiques[0, 2].set_title('Propriétaires de support') # Titre du graphique
 
+# Graphique 4 : systèmes utilisés par les émetteurs (GSM, LTE, 5G NR...)
+top_systemes = emetteurs['EMR_LB_SYSTEME'].value_counts().head(10) # On compte chaque système et on garde les 10 premiers
+top_systemes.plot(kind='barh', ax=graphiques[1, 0], color='lightgreen', xlabel="Nombre d'émetteurs", ylabel='') # On dessine des barres horizontales dans la case en bas à gauche
+graphiques[1, 0].set_title('Systèmes (émetteurs)') # Titre du graphique
+
+for graphique in [graphiques[1, 0]]: # Pour le diagramme en barres horizontales
+    graphique.invert_yaxis() # On met la valeur la plus grande en haut
+    graphique.bar_label(graphique.containers[0], padding=3, fontsize=7) # On écrit la valeur au bout de chaque barre
+    graphique.margins(x=0.2) # On laisse de la place à droite pour que les valeurs ne sortent pas du cadre
+
 for graphique in graphiques.flat: # Pour chacun des 6 graphiques
     graphique.tick_params(labelsize=7) # Taille du texte des axes
 figure.set_layout_engine('tight', h_pad=3, w_pad=2) # Les espaces sont calculés pour que les graphiques ne se chevauchent pas (h_pad et w_pad : espace en plus entre les graphiques)
