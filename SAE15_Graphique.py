@@ -1,4 +1,5 @@
 import os # os sert à construire les chemins vers les fichiers
+import tkinter as tk # tkinter sert à créer la fenêtre
 import pandas as pd # pandas sert à lire et manipuler les tableaux de données
 
 
@@ -41,3 +42,20 @@ stations['DTE_EN_SERVICE'] = pd.to_datetime(stations['DTE_EN_SERVICE'], format='
 
 bandes['BANDE'] = bandes['BAN_NB_F_DEB'] + '-' + bandes['BAN_NB_F_FIN'] + ' ' + bandes['BAN_FG_UNITE'] + 'Hz' # On fabrique un libellé lisible pour chaque bande, par exemple "925,1-935,1 MHz"
 bandes = bandes[['BANDE']].astype('category') # On ne garde que le libellé, en category car très répété
+
+
+# 4. Fenêtre Tkinter
+
+fenetre = tk.Tk() # On crée la fenêtre principale
+fenetre.title("Analyse des installations radio ANFR") # Titre de la fenêtre
+fenetre.geometry("1300x850") # Taille de la fenêtre en pixels
+titre_fenetre = tk.Label(fenetre, text="Analyse des installations radio ANFR", font=("Arial", 16, "bold")) # On ajoute un titre en haut de la fenêtre
+titre_fenetre.pack(pady=10) # On place le titre dans la fenêtre
+
+barre_defilement = tk.Scrollbar(fenetre, orient=tk.VERTICAL) # On crée la barre de défilement verticale
+barre_defilement.pack(side=tk.RIGHT, fill=tk.Y) # On la place à droite de la fenêtre, sur toute la hauteur
+zone_defilement = tk.Canvas(fenetre, yscrollcommand=barre_defilement.set, highlightthickness=0) # On crée une zone qui peut défiler, reliée à la barre (highlightthickness=0 : sans bordure noire)
+zone_defilement.pack(side=tk.LEFT, fill=tk.BOTH, expand=True) # On la place à gauche de la barre, en prenant toute la place restante
+barre_defilement.config(command=zone_defilement.yview) # Quand on bouge la barre, la zone défile
+
+fenetre.mainloop() # On lance la fenêtre
