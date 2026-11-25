@@ -93,7 +93,12 @@ top_systemes = emetteurs['EMR_LB_SYSTEME'].value_counts().head(10) # On compte c
 top_systemes.plot(kind='barh', ax=graphiques[1, 0], color='lightgreen', xlabel="Nombre d'émetteurs", ylabel='') # On dessine des barres horizontales dans la case en bas à gauche
 graphiques[1, 0].set_title('Systèmes (émetteurs)') # Titre du graphique
 
-for graphique in [graphiques[1, 0]]: # Pour le diagramme en barres horizontales
+# Graphique 5 : bandes de fréquences les plus utilisées
+top_bandes = bandes['BANDE'].value_counts().head(10) # On compte chaque bande et on garde les 10 premières
+top_bandes.plot(kind='barh', ax=graphiques[1, 1], color='gold', xlabel="Nombre d'émetteurs", ylabel='') # On dessine des barres horizontales dans la case en bas au milieu
+graphiques[1, 1].set_title('Bandes de fréquences (top 10)') # Titre du graphique
+
+for graphique in [graphiques[1, 0], graphiques[1, 1]]: # Pour les 2 diagrammes en barres horizontales
     graphique.invert_yaxis() # On met la valeur la plus grande en haut
     graphique.bar_label(graphique.containers[0], padding=3, fontsize=7) # On écrit la valeur au bout de chaque barre
     graphique.margins(x=0.2) # On laisse de la place à droite pour que les valeurs ne sortent pas du cadre
