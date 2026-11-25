@@ -20,6 +20,12 @@ def lire_fichier(dossier, nom_fichier, colonnes, type_donnees=str): # Fonction q
     return tableau # On renvoie le tableau
 
 
+def texte_pourcentage(pourcentage): # Fonction qui écrit le pourcentage d'une part du camembert
+    if pourcentage >= 3: # Si la part fait au moins 3 %
+        return str(round(pourcentage, 1)) + '%' # On écrit son pourcentage
+    return '' # Sinon on n'écrit rien, pour que les petites parts ne se chevauchent pas
+
+
 # 1. Lecture des données (seulement les colonnes utiles aux graphiques)
 
 stations = lire_fichier(DOSSIER_DATA, 'SUP_STATION.txt', ['ADM_ID', 'DTE_EN_SERVICE']) # Stations : code exploitant, date de mise en service
@@ -70,6 +76,17 @@ for graphique in [graphiques[0, 0], graphiques[0, 1]]: # Pour les 2 diagrammes e
     for nom_barre in graphique.get_xticklabels(): # Pour chaque nom sous les barres
         nom_barre.set_rotation(45) # On penche le nom à 45°
         nom_barre.set_ha('right') # On accroche la fin du nom sous sa barre pour qu'il ne chevauche pas ses voisins
+
+# Graphique 3 : propriétaires de support (camembert)
+parts_proprietaires = supports['TPO_LB'].value_counts() # On compte chaque propriétaire
+total_autres = parts_proprietaires.iloc[10:].sum() # On additionne tous les propriétaires après le 10e
+parts_proprietaires = parts_proprietaires.iloc[:10].copy() # On ne garde que les 10 premiers propriétaires
+if total_autres > 0: # S'il reste des propriétaires, on les regroupe dans une part "Autres"
+    parts_proprietaires['Autres'] = total_autres # On ajoute la part "Autres"
+couleurs_camembert = ['skyblue', 'lightcoral', 'lightgreen', 'gold', 'mediumpurple', 'sandybrown', 'turquoise', 'hotpink', 'yellowgreen', 'plum', 'lightgrey'] # 11 couleurs : 10 pour les propriétaires et du gris pour "Autres" (le style n'en a que 6)
+graphiques[0, 2].pie(parts_proprietaires, colors=couleurs_camembert[:len(parts_proprietaires)], autopct=texte_pourcentage, startangle=90, textprops={'fontsize': 7}) # On dessine le camembert sans les noms autour (ils iraient se chevaucher), texte_pourcentage écrit les pourcentages des grosses parts
+graphiques[0, 2].legend(parts_proprietaires.index, loc='upper center', bbox_to_anchor=(0.5, 0), ncol=2, fontsize=7) # On met les noms dans une légende centrée juste sous le camembert, sur 2 colonnes
+graphiques[0, 2].set_title('Propriétaires de support') # Titre du graphique
 
 for graphique in graphiques.flat: # Pour chacun des 6 graphiques
     graphique.tick_params(labelsize=7) # Taille du texte des axes
